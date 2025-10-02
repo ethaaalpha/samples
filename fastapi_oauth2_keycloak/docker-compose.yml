@@ -1,0 +1,71 @@
+services:
+  database:
+    container_name: postgres
+    image: postgres:17-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=test_db
+      - POSTGRES_USER=aaa
+      - POSTGRES_PASSWORD=aed
+    volumes:
+      - test_db:/var/lib/postgresql/data
+    healthcheck:
+        test: [ "CMD", "pg_isready", "-d", "test_db", "-U", "aaa" ]
+        start_period: 1s
+        interval: 1s
+        timeout: 5s
+        retries: 10
+
+  smtp:
+    container_name: smtp
+    image: rnwood/smtp4dev:3.8.6
+    ports:
+      - "8083:80"
+    expose:
+      - "25"
+  
+  api:
+    container_name: fastapi
+    build: ./fastapi
+    ports:
+      - "8080:8080"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+  keycloak:
+    container_name: keycloak
+    build: ./keycloak
+    environment:
+    - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+    - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    - KC_DB_URL_HOST=database
+    - KC_DB_USERNAME=aaa
+    - KC_DB_PASSWORD=aed
+    - KC_DB_URL_DATABASE=test_db
+    depends_on:
+      database:
+        condition: service_healthy
+      smtp:
+        condition: service_started
+    command: config.sh
+    ports:
+      - "8082:8082"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "{ printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  test_db:
+
+# delete (db)
+# docker compose down --rmi local --volumes
+
+# start
+# docker compose up --build
+
+# stop
+# docker compose down
