@@ -1,3 +1,4 @@
+from pprint import pprint
 import requests
 import xml.etree.ElementTree as ET
 
@@ -16,7 +17,7 @@ class Fetcher():
         """
         return none if not found or not available (missing mandatory keys)
         """
-        mandatory_keys = ["magneturl", "imdbid"]
+        mandatory_keys = ["magneturl"]
         ns = {"torznab": "http://torznab.com/schemas/2015/feed"}
 
         root = ET.fromstring(response)
@@ -27,9 +28,10 @@ class Fetcher():
         for attr in item.findall(".//torznab:attr", namespaces=ns):
             data[attr.attrib.get("name")] = attr.attrib.get("value")
 
+        pprint(data)
         if not all(k in data for k in mandatory_keys):
-            return None
-        return data
+            return None, None
+        return data.get("magneturl"), data.get("imdbid")
 
     def fetch_torrent(self, movie_name: str, imdbid: str) -> None | str:
         """
@@ -44,9 +46,10 @@ class Fetcher():
         rq = requests.get(self.url, params=params)
         rq.raise_for_status()
 
-        data = self.parse_response(rq.content)
+        magnet, imdbid_t = self.parse_response(rq.content)
 
-        if not data or data["imdbid"] != imdbid:
+        print(f"{imdbid_t} {imdbid}")
+        if imdbid_t and imdbid_t != imdbid:
             return None
         else:
-            return data["magneturl"]
+            return magnet

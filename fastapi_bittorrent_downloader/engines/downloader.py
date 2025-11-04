@@ -32,6 +32,7 @@ class Downloader():
 
     def _wait_for_metadata(self, torrent_h):
         while not torrent_h.has_metadata():
+            print("waiting for metadata..")
             time.sleep(0.5)
 
     def _fetch_torrent_info_only(self, magnet_uri: str):
@@ -53,24 +54,33 @@ class Downloader():
 
     def _optimize_files(self, torrent_h):
         torrent_info = torrent_h.get_torrent_info()
-        files_sizes = [f.size for f in torrent_info.files()]
-        largest_file_index = files_sizes.index(max(files_sizes))
+        files = [(i, v) for i, v in enumerate(torrent_info.files())]
+        files_sorted = sorted(files, key=lambda x: x[1].size)
+        largest = files_sorted[-1]
+        largest_i = largest[0]
 
         num_files = torrent_info.num_files()
         priorities = [0] * num_files
 
         # only the movie should be downloaded
-        priorities[largest_file_index] = 7
+        priorities[largest_i] = 7
 
         torrent_h.prioritize_files(priorities)
+        torrent_h.rename_file(largest_i, f"movie{Path(largest[1].path).suffix}")
 
     def _register_torrent(self, magnet_uri: str):
         # we download from magnet so we need to wait for metadata
         # this will help us prioritize only the "movie" ifle
-        torrent_h = self.session.add_torrent({'url': magnet_uri, 'save_path': '.'})
+        torrent_h = self.session.add_torrent({
+            'url': magnet_uri, 
+            'save_path': '.',
+            'flags': lt.torrent_flags.sequential_download
+            })
 
         self._wait_for_metadata(torrent_h)
         self._optimize_files(torrent_h)
+
+        print("Sequential:", torrent_h.status().sequential_download)
 
         torrent_s = torrent_h.status()
         print(f"starting download of {torrent_s.name} !")
@@ -86,6 +96,7 @@ class Downloader():
             torrents = self.session.get_torrents()
 
             for tor in torrents:
+                print("checking status")
                 status = tor.status()
 
                 # tor.info_hash()
@@ -98,5 +109,6 @@ class Downloader():
                 
             # starting new torrents
             while not self.queue.empty():
+                print('ici')
                 self._register_torrent(self.queue.get())
             time.sleep(1)
