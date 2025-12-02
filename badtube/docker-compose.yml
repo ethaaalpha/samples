@@ -1,0 +1,97 @@
+services:
+
+  postgres:
+    container_name: postgres
+    image: postgres:18.1-alpine
+    restart: unless-stopped
+    shm_size: 128mb
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql/18/docker
+      - ./postgresql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+
+  smtp:
+    container_name: smtp
+    image: rnwood/smtp4dev:3.8.6
+    ports:
+      - "8083:80"
+
+  keycloak:
+    container_name: keycloak
+    build: ./keycloak
+    environment:
+    - KC_BOOTSTRAP_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USERNAME}
+    - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+    - KC_DB_URL_HOST=postgres
+    - KC_DB_USERNAME=${DB_USERNAME}
+    - KC_DB_PASSWORD=${DB_PASSWORD}
+    - KC_DB_URL_DATABASE=${DB_NAME}
+    - KC_DB_SCHEMA=keycloak
+    - REALM_NAME=hypertube
+    depends_on:
+      postgres:
+        condition: service_healthy
+      smtp:
+        condition: service_started
+    command: config.sh
+    ports:
+      - "8082:8082"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "{ printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  fastapi:
+    container_name: fastapi
+    build: ./backend
+    environment:
+      - TMDB_KEY=${TMDB_KEY}
+      - JACKETT_KEY=${JACKETT_KEY}
+      - JACKETT_HOST=jackett:9117
+      - OPENSUBTITLES_KEY=${OPENSUBTITLES_KEY}
+      - OPENSUBTITLES_APP=${OPENSUBTITLES_APP}
+      - DOWNLOADS_LOCATION=/mnt/data
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - KEYCLOAK_URL=http://keycloak:8082
+      - KEYCLOAK_REALM=hypertube
+      - LOCAL_DB=True # REMOVE AFTER
+    ports:
+      - 8000:8000
+    volumes:
+      - ./backend:/app
+      - ./data:/mnt/data
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  jackett:
+    container_name: jackett
+    build: ./jackett
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - AUTO_UPDATE=false
+      - JACKETT_KEY=${JACKETT_KEY}
+    ports: # remove for production
+      - 9117:9117
+    restart: unless-stopped
+
+volumes:
+  postgres:
