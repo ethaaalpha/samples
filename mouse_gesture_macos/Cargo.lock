@@ -82,6 +82,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
 
 [[package]]
+name = "macos_gesture"
+version = "0.1.0"
+dependencies = [
+ "core-foundation",
+ "core-graphics",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -97,14 +105,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21b2ebcf727b7760c461f091f9f0f539b77b8e87f2fd88131e7f1b433b3cece4"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "rust"
-version = "0.1.0"
-dependencies = [
- "core-foundation",
- "core-graphics",
 ]
 
 [[package]]
