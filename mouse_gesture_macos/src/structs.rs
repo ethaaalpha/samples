@@ -21,5 +21,4 @@ impl Actions {
 pub struct Options {
     pub reverse_scroll: bool,
     pub drag_manager: bool,
-    pub drag_trigger: i64,
 }

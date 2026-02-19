@@ -1,11 +1,12 @@
+use std::process::exit;
 use std::sync::atomic::AtomicBool;
-use std::vec;
+use std::{env, vec};
 
 use core_foundation::runloop::{CFRunLoop, kCFRunLoopCommonModes};
 use core_graphics::event::{CGEvent, CGEventFlags, CGKeyCode, EventField};
 use core_graphics::event::{
-    CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy,
-    CGEventType, CallbackResult,
+    CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
+    CallbackResult,
 };
 use core_graphics::event_source::CGEventSource;
 use core_graphics::event_source::CGEventSourceStateID;
@@ -14,14 +15,8 @@ use core_graphics::event_source::CGEventSourceStateID;
 mod structs;
 use structs::{Actions, Options};
 
-mod consts;
-use consts::{NOT_AUTHORIZED, SYS_ERROR};
-
-static APP_OPTS: Options = Options {
-    reverse_scroll: false,
-    drag_manager: true,
-    drag_trigger: 20,
-};
+mod constants;
+use constants::{DRAG_TRIGGER, NOT_AUTHORIZED, OPTION_DRAG, OPTION_SCROLL, SYS_ERROR, WRONG_USAGE};
 
 static CONSUMED: AtomicBool = AtomicBool::new(false);
 
@@ -65,14 +60,14 @@ fn handle_mousse_other_drag(event: &CGEvent) -> CallbackResult {
     let delta_x = event.get_integer_value_field(EventField::MOUSE_EVENT_DELTA_X);
     let delta_y = event.get_integer_value_field(EventField::MOUSE_EVENT_DELTA_Y);
 
-    if delta_x.abs() > delta_y.abs() && delta_x.abs() > APP_OPTS.drag_trigger {
+    if delta_x.abs() > delta_y.abs() && delta_x.abs() > DRAG_TRIGGER {
         // horizontal
         if delta_x > 0 {
             switch_desktops(Actions::SwipeRight);
         } else {
             switch_desktops(Actions::SwipeLeft);
         }
-    } else if delta_y.abs() > APP_OPTS.drag_trigger {
+    } else if delta_y.abs() > DRAG_TRIGGER {
         // vertical
         if delta_y > 0 {
             switch_desktops(Actions::SwipeBottom);
@@ -83,29 +78,7 @@ fn handle_mousse_other_drag(event: &CGEvent) -> CallbackResult {
     return CallbackResult::Keep;
 }
 
-fn mouse_handler(
-    _proxy: CGEventTapProxy,
-    event_type: CGEventType,
-    event: &CGEvent,
-) -> CallbackResult {
-    match event_type {
-        CGEventType::ScrollWheel if APP_OPTS.reverse_scroll => {
-            return handle_scroll_wheel(event);
-        }
-        CGEventType::OtherMouseDragged if APP_OPTS.drag_manager => {
-            return handle_mousse_other_drag(event);
-        }
-        CGEventType::OtherMouseUp if APP_OPTS.drag_manager => {
-            CONSUMED.store(false, std::sync::atomic::Ordering::Relaxed);
-            return CallbackResult::Keep;
-        }
-        _ => {
-            return CallbackResult::Keep;
-        }
-    }
-}
-
-fn runner() {
+fn runner(opts: Options) {
     let event_tap = CGEventTap::new(
         CGEventTapLocation::HID,
         CGEventTapPlacement::HeadInsertEventTap,
@@ -115,9 +88,24 @@ fn runner() {
             CGEventType::OtherMouseDragged,
             CGEventType::OtherMouseUp,
         ],
-        mouse_handler,
+        move |_proxy, event_type, event| match event_type {
+            CGEventType::ScrollWheel if opts.reverse_scroll => {
+                return handle_scroll_wheel(event);
+            }
+            CGEventType::OtherMouseDragged if opts.drag_manager => {
+                return handle_mousse_other_drag(event);
+            }
+            CGEventType::OtherMouseUp if opts.drag_manager => {
+                CONSUMED.store(false, std::sync::atomic::Ordering::Relaxed);
+                return CallbackResult::Keep;
+            }
+            _ => {
+                return CallbackResult::Keep;
+            }
+        },
     )
     .expect(NOT_AUTHORIZED);
+
     let event_source = event_tap
         .mach_port()
         .create_runloop_source(0)
@@ -131,5 +119,26 @@ fn runner() {
 }
 
 fn main() {
-    runner();
+    let args: Vec<String> = env::args().skip(1).collect();
+
+    let mut opts: Options = Options {
+        reverse_scroll: false,
+        drag_manager: false,
+    };
+
+    for arg in args {
+        match arg.as_str() {
+            OPTION_SCROLL => {
+                opts.reverse_scroll = true;
+            }
+            OPTION_DRAG => {
+                opts.drag_manager = true;
+            }
+            _ => {
+                eprintln!("{}", WRONG_USAGE);
+                exit(1);
+            }
+        }
+    }
+    runner(opts);
 }
