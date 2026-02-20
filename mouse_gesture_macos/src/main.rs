@@ -22,8 +22,13 @@ static CONSUMED: AtomicBool = AtomicBool::new(false);
 
 fn handle_scroll_wheel(event: &CGEvent) -> CallbackResult {
     let vertical_axis = event.get_integer_value_field(EventField::SCROLL_WHEEL_EVENT_DELTA_AXIS_1);
+    let is_track_pad =
+        event.get_integer_value_field(EventField::SCROLL_WHEEL_EVENT_IS_CONTINUOUS) == 1;
 
-    event.set_integer_value_field(EventField::SCROLL_WHEEL_EVENT_DELTA_AXIS_1, -vertical_axis);
+    if !is_track_pad {
+        event.set_integer_value_field(EventField::SCROLL_WHEEL_EVENT_DELTA_AXIS_1, -vertical_axis);
+    }
+
     return CallbackResult::Keep;
 }
 
