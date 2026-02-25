@@ -1,7 +1,7 @@
 # fast-api + oauth2 support by keycloak server
 
 > [!NOTE]
-> only keycloak database is persisted, User table of fastapi are not
+> only keycloak database is persisted, User table of fastapi is not
 
 technos:
 - fastapi (sqlmodel, starlette)
